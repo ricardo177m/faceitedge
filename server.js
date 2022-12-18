@@ -17,15 +17,15 @@ const outgoing = {
 const incoming = {
     welcome: "CPjKxAISHQobRkFDRUlUIEVkZ2UgPHByb2Q+ICgxLjMzLjEp",
     ping: "EgIYAg==",
-    event: {
-        // <12_bytes> + <event> + <3_bytes> + <json_payload>
-        // entity_activity: "ZW50aXR5X2FjdGl2aXR5",
-        lobby_created: "bG9iYnlfY3JlYXRlZA==",
-        lobby_destroyed: "D2xvYmJ5X2Rlc3Ryb3llZA==", // <9_bytes> + <event> + <2_bytes> + <json_payload>
-        lobby_player_joined: "bG9iYnlfcGxheWVyX2pvaW5lZA==",
-        lobby_updated: "bG9iYnlfdXBkYXRlZA==",
-        lobby_player_left: "bG9iYnlfcGxheWVyX2xlZnQ=",
-    },
+    events: [
+        { name: "lobby_player_joined", padding: { l: 12, r: 3 } },
+        { name: "lobby_player_left", padding: { l: 12, r: 3 } },
+        { name: "lobby_created", padding: { l: 12, r: 3 } },
+        { name: "lobby_destroyed", padding: { l: 9, r: 2 } },
+        { name: "lobby_updated", padding: { l: 12, r: 3 } },
+    ],
+    // <12_bytes> + <event> + <3_bytes> + <json_payload>
+    // lobby_destroyed -> <9_bytes> + <event> + <2_bytes> + <json_payload>
 };
 
 function send(msg) {
@@ -37,17 +37,23 @@ function init() {
     send(outgoing.subscribe.clan(clanid));
 }
 
-function parseEvent(nbytes_left, nbytes_right, eventType, msg) {
+function parseEvent(eventType, msg) {
     // <left_bytes> + <event> + <right_bytes> + <json_payload>
-    const eventTypeLength = Buffer.from(eventType, "base64").length;
-    const event = msg.slice(nbytes_left, nbytes_left + eventTypeLength);
-    const payload = msg.slice(nbytes_left + eventTypeLength + nbytes_right);
+    const bytesLeft = eventType.padding.l;
+    const bytesRight = eventType.padding.r;
+    const eventTypeLength = Buffer.from(eventType.name, "utf8").length;
 
-    if (event.toString("base64") !== eventType) return null;
+    const event = msg.subarray(bytesLeft, bytesLeft + eventTypeLength);
+    const payload = msg.subarray(bytesLeft + eventTypeLength + bytesRight);
+
+    const presumedEvent = Buffer.from(eventType.name, "utf8");
+
+    // compare presumed event with incoming event
+    if (!presumedEvent.equals(event)) return null;
+
     console.log("\n--- EVENT ---");
-    console.log("actual event: " + eventType);
-    console.log("parsed event: " + event.toString("utf-8"));
-    console.log("payload:\n" + payload.toString("utf-8"));
+    console.log("incoming event: " + event.toString("utf8"));
+    console.log("payload:\n" + payload.toString("utf8"));
 
     return JSON.parse(payload);
 }
@@ -65,9 +71,23 @@ client.on("close", (code, reason) => {
 
 client.on("message", (message) => {
     // heartbeat
-    if (message.equals(Buffer.from(incoming.ping, "base64"))) {
-        send(outgoing.pong);
-        return;
+    if (message.equals(Buffer.from(incoming.ping, "base64"))) return send(outgoing.pong);
+
+    // event
+    for (eventType of incoming.events) {
+        const parsed = parseEvent(eventType, message);
+        if (parsed !== null) {
+            const incomingEvent = {
+                event: eventType.name,
+                payload: parsed,
+            };
+            if (incomingEvent === last) return; // workaround for duplicate events
+            last = incomingEvent; // (sometimes the same event is sent twice)
+            
+            // do something with incomingEvent
+
+            return;
+        }
     }
 
     // welcome message
@@ -75,37 +95,5 @@ client.on("message", (message) => {
         console.log(`[i] Welcome accepted. Init`);
         init();
         return;
-    }
-
-    // event
-    const events_12_3 = [incoming.event.lobby_created, incoming.event.lobby_player_joined, incoming.event.lobby_updated, incoming.event.lobby_player_left];
-    const events_9_2 = [incoming.event.lobby_destroyed];
-
-    for (eventType of events_12_3) {
-        const parsed = parseEvent(12, 3, eventType, message);
-        if (parsed !== null) {
-            const thisMsg = {
-                event: eventType,
-                payload: parsed,
-            };
-            if (thisMsg === last) return;
-            last = thisMsg; // sometimes the same event is sent twice
-            console.log(Buffer.from(eventType, "base64").toString("utf-8"));
-            return;
-        }
-    }
-
-    for (eventType of events_9_2) {
-        const parsed = parseEvent(9, 2, eventType, message);
-        if (parsed !== null) {
-            const thisMsg = {
-                event: eventType,
-                payload: parsed,
-            };
-            if (thisMsg === last) return;
-            last = thisMsg; // sometimes the same event is sent twice
-            console.log(Buffer.from(eventType, "base64").toString("utf-8"));
-            return;
-        }
     }
 });
