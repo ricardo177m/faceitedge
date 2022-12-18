@@ -22,7 +22,7 @@ const incoming = {
         // entity_activity: "ZW50aXR5X2FjdGl2aXR5",
         lobby_created: "bG9iYnlfY3JlYXRlZA==",
         lobby_destroyed: "D2xvYmJ5X2Rlc3Ryb3llZA==", // <9_bytes> + <event> + <2_bytes> + <json_payload>
-        lobby_player_joined: "bG9iYnlfcGxheWVyX2pvaW5lZBI=",
+        lobby_player_joined: "bG9iYnlfcGxheWVyX2pvaW5lZA==",
         lobby_updated: "bG9iYnlfdXBkYXRlZA==",
         lobby_player_left: "bG9iYnlfcGxheWVyX2xlZnQ=",
     },
@@ -44,7 +44,12 @@ function parseEvent(nbytes_left, nbytes_right, eventType, msg) {
     const payload = msg.slice(nbytes_left + eventTypeLength + nbytes_right);
 
     if (event.toString("base64") !== eventType) return null;
-    return payload;
+    console.log("\n--- EVENT ---");
+    console.log("actual event: " + eventType);
+    console.log("parsed event: " + event.toString("utf-8"));
+    console.log("payload:\n" + payload.toString("utf-8"));
+
+    return JSON.parse(payload);
 }
 
 client.on("open", () => {
