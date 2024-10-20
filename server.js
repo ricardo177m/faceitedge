@@ -1,106 +1,79 @@
 const ws = require("ws");
+const fs = require("fs");
+const moment = require("moment");
+const { parseEvent, incoming } = require("./parser");
+
 const client = new ws("wss://edge.faceit.com/v1/ws");
 
-const clanid = "61395179-2483-49c9-a9b2-dd251a5ca0e0";
+const log = false;
+const matchid = "1-0abd6239-e094-4bd9-b317-171160db6ffe";
 
-let last = null;
+if (log) {
+  const name = "logs/" + moment().format("yyyy-MM-DD_HH-mm-ss-SSS") + ".txt";
+  const stream = fs.createWriteStream(name, { flags: "a" });
+}
 
 const outgoing = {
-    welcomeAnonymous: "CPjKxAISFgoJMC4wLjAtZGV2Eglhbm9ueW1vdXM=",
-    pong: "CAASAhgC",
-    subscribe: {
-        public: "CAASGAgBGAMiEgoGcHVic3ViEggKBnB1YmxpYw==",
-        clan: (id) => Buffer.concat([Buffer.from("CAASOwgFGAMiNQoGcHVic3ViEisK", "base64"), Buffer.from(")hubs-" + id)]).toString("base64"),
-        user: "",
-        lobby: ""
-    },
-};
-
-const incoming = {
-    welcome: "CPjKxAISHQobRkFDRUlUIEVkZ2UgPHByb2Q+ICgxLjQ1LjIp",
-    ping: "EgIYAg==",
-    events: [
-        { name: "lobby_player_joined", padding: { l: 12, r: 3 } },
-        { name: "lobby_player_left", padding: { l: 12, r: 3 } },
-        { name: "lobby_created", padding: { l: 12, r: 3 } },
-        { name: "lobby_destroyed", padding: { l: 9, r: 2 } },
-        { name: "lobby_updated", padding: { l: 12, r: 3 } },
-    ],
-    // <12_bytes> + <event> + <3_bytes> + <json_payload>
-    // lobby_destroyed -> <9_bytes> + <event> + <2_bytes> + <json_payload>
+  welcomeAnonymous: "CPjKxAISFgoJMC4wLjAtZGV2Eglhbm9ueW1vdXM=",
+  welcomeToken: (token) => Buffer.concat([Buffer.from("CPjKxAISOAoJMC4wLjAtZGV2Eis=", "base64"), Buffer.from("Bearer " + token, "utf-8")]).toString("base64"),
+  pong: "CAASAhgC",
+  subscribe: {
+    public: "CAASGAgBGAMiEgoGcHVic3ViEggKBnB1YmxpYw==",
+    clan: (id) => Buffer.concat([Buffer.from("CAASOwgFGAMiNQoGcHVic3ViEisK", "base64"), Buffer.from(")hubs-" + id)]).toString("base64"),
+    user: (id) => Buffer.concat([Buffer.from("CAASQwgCGAMiPQoGcHVic3ViEjMKMXByaXZhdGUtdXNlci0=", "base64"), Buffer.from(id)]).toString("base64"),
+    lobby: "",
+    match: (id) => Buffer.concat([Buffer.from("CAASPQgCGAMiNwoGcHVic3ViEi0KK3Jvb21f", "base64"), Buffer.from(id)]).toString("base64"),
+    democracy: (id) => Buffer.concat([Buffer.from("CAASQggmGAMiPAoGcHVic3ViEjIKMGRlbW9jcmFjeS0=", "base64"), Buffer.from(id)]).toString("base64"),
+  },
 };
 
 function send(msg) {
-    client.send(Buffer.from(msg, "base64"));
+  client.send(Buffer.from(msg, "base64"));
 }
 
 function init() {
-    // subscribe to clan
-    // send(outgoing.subscribe.clan(clanid));
-    send(outgoing.subscribe.user)
-    console.log("[i] Sent subscribe to user");
-}
-
-function parseEvent(eventType, msg) {
-    // <left_bytes> + <event> + <right_bytes> + <json_payload>
-    const bytesLeft = eventType.padding.l;
-    const bytesRight = eventType.padding.r;
-    const eventTypeLength = Buffer.from(eventType.name, "utf8").length;
-
-    const event = msg.subarray(bytesLeft, bytesLeft + eventTypeLength);
-    const payload = msg.subarray(bytesLeft + eventTypeLength + bytesRight);
-
-    const presumedEvent = Buffer.from(eventType.name, "utf8");
-
-    // compare presumed event with incoming event
-    if (!presumedEvent.equals(event)) return null;
-
-    console.log("\n--- EVENT ---");
-    console.log("incoming event: " + event.toString("utf8"));
-    console.log("payload:\n" + payload.toString("utf8"));
-
-    return JSON.parse(payload);
+  send(outgoing.subscribe.public);
+  console.log("[i] Subscribed to public");
+  send(outgoing.subscribe.match(matchid));
+  console.log("[i] Subscribed to match " + matchid);
+  send(outgoing.subscribe.democracy(matchid));
+  console.log("[i] Subscribed to democracy " + matchid);
 }
 
 client.on("open", () => {
-    console.log("[i] Opened connection to FACEIT Edge");
+  console.log("[i] Opened connection to FACEIT Edge");
 
-    // send the welcome anonymous message
-    send(outgoing.welcomeAnonymous);
-    console.log("[i] Sent welcome anonymous");
+  // send the welcome anonymous message
+  send(outgoing.welcomeAnonymous);
+  console.log("[i] Sent welcome anonymous");
 });
 
 client.on("close", (code, reason) => {
-    console.log("[i] Closed connection to FACEIT Edge: " + code + " " + reason);
+  console.log(`[i] Closed connection to FACEIT Edge: ${code} ${reason}`);
 });
 
 client.on("message", (message) => {
-    // heartbeat
-    if (message.equals(Buffer.from(incoming.ping, "base64"))) return send(outgoing.pong);
+  if (log) {
+    const time = moment().format("yyyy-mm-DD_HH-mm-ss ");
+    stream.write(time + Buffer.from(message, "utf-8").toString("base64") + "\n");
+  }
 
-    console.log(`RAW: ${Buffer.from(message, "utf-8")}`);
+  // console.log(`RAW: ${Buffer.from(message, "utf-8")}`);
 
-    // event
-    for (eventType of incoming.events) {
-        const parsed = parseEvent(eventType, message);
-        if (parsed !== null) {
-            const incomingEvent = {
-                event: eventType.name,
-                payload: parsed,
-            };
-            if (incomingEvent === last) return; // workaround for duplicate events
-            last = incomingEvent; // (sometimes the same event is sent twice)
-            
-            // do something with incomingEvent
+  const e = parseEvent(message);
 
-            return;
-        }
-    }
+  if (e === null) return console.log(" [e] Unknown event");
+  if (e.event === "duplicate") return console.log(" [e] Duplicate event");
 
-    // welcome message
-    if (message.equals(Buffer.from(incoming.welcome, "base64"))) {
-        console.log(`[+] Welcome accepted - ${Buffer.from(message, "utf-8").subarray(9)}`);
-        init();
-        return;
-    }
+  console.log(" [e] Received event: " + e.event);
+
+  switch (e.event) {
+    case "welcome":
+      console.log(`[i] Welcome accepted, version ${e.payload}`);
+      init();
+      break;
+    case "ping":
+      send(outgoing.pong);
+      break;
+  }
 });

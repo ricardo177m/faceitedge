@@ -1,0 +1,17 @@
+package userpackage;
+syntax = "proto3";
+
+message Channel {
+  int32 field1 = 1;
+  Topic topic = 2;
+}
+
+message Topic {
+  int32 field2 = 1;
+  Event event = 2;
+}
+
+message Event {
+  string field3 = 1;
+  string field4 = 2;
+}
