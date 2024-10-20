@@ -6,16 +6,18 @@ const clanid = "61395179-2483-49c9-a9b2-dd251a5ca0e0";
 let last = null;
 
 const outgoing = {
-    welcomeAnonymous: "CPjKxAISFgoJMC4wLjAtZGV2Eglhbm9ueW1vdXM",
+    welcomeAnonymous: "CPjKxAISFgoJMC4wLjAtZGV2Eglhbm9ueW1vdXM=",
     pong: "CAASAhgC",
     subscribe: {
         public: "CAASGAgBGAMiEgoGcHVic3ViEggKBnB1YmxpYw==",
         clan: (id) => Buffer.concat([Buffer.from("CAASOwgFGAMiNQoGcHVic3ViEisK", "base64"), Buffer.from(")hubs-" + id)]).toString("base64"),
+        user: "",
+        lobby: ""
     },
 };
 
 const incoming = {
-    welcome: "CPjKxAISHQobRkFDRUlUIEVkZ2UgPHByb2Q+ICgxLjMzLjEp",
+    welcome: "CPjKxAISHQobRkFDRUlUIEVkZ2UgPHByb2Q+ICgxLjQ1LjIp",
     ping: "EgIYAg==",
     events: [
         { name: "lobby_player_joined", padding: { l: 12, r: 3 } },
@@ -34,7 +36,9 @@ function send(msg) {
 
 function init() {
     // subscribe to clan
-    send(outgoing.subscribe.clan(clanid));
+    // send(outgoing.subscribe.clan(clanid));
+    send(outgoing.subscribe.user)
+    console.log("[i] Sent subscribe to user");
 }
 
 function parseEvent(eventType, msg) {
@@ -63,6 +67,7 @@ client.on("open", () => {
 
     // send the welcome anonymous message
     send(outgoing.welcomeAnonymous);
+    console.log("[i] Sent welcome anonymous");
 });
 
 client.on("close", (code, reason) => {
@@ -72,6 +77,8 @@ client.on("close", (code, reason) => {
 client.on("message", (message) => {
     // heartbeat
     if (message.equals(Buffer.from(incoming.ping, "base64"))) return send(outgoing.pong);
+
+    console.log(`RAW: ${Buffer.from(message, "utf-8")}`);
 
     // event
     for (eventType of incoming.events) {
@@ -92,7 +99,7 @@ client.on("message", (message) => {
 
     // welcome message
     if (message.equals(Buffer.from(incoming.welcome, "base64"))) {
-        console.log(`[i] Welcome accepted. Init`);
+        console.log(`[+] Welcome accepted - ${Buffer.from(message, "utf-8").subarray(9)}`);
         init();
         return;
     }
