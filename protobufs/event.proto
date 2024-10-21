@@ -1,17 +1,37 @@
-package userpackage;
+package eventpackage;
 syntax = "proto3";
 
-message Channel {
-  int32 field1 = 1;
-  Topic topic = 2;
+message Message {
+  optional int32 field1 = 1;
+  oneof content {
+    SubMessage submessage = 2;
+    Welcome welcome = 3;
+    PubsubConfirmation pubsub_confirmation = 4;
+  }
 }
 
-message Topic {
+message Welcome {
+  string meta = 1;
+}
+
+message SubMessage {
   int32 field2 = 1;
   Event event = 2;
 }
 
 message Event {
-  string field3 = 1;
-  string field4 = 2;
+  string event_name = 1;
+  string payload = 2;
+}
+
+message PubsubConfirmation {
+  int32 field1 = 1;
+  int32 field2 = 2;
+  int32 field3 = 3;
+  PubsubConfirmationSubMsg field4 = 4;
+}
+
+message PubsubConfirmationSubMsg {
+  int32 field1 = 1;
+  string field2 = 2;
 }

@@ -6,7 +6,7 @@ const { parseEvent, incoming } = require("./parser");
 const client = new ws("wss://edge.faceit.com/v1/ws");
 
 const shouldlog = true;
-const matchid = "1-e4d6d0a7-6938-4f92-a4ab-3292b140763a";
+const matchid = "1-b324863f-e642-4b9e-bee6-279f13274cb3";
 
 let stream;
 
