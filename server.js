@@ -5,12 +5,14 @@ const { parseEvent, incoming } = require("./parser");
 
 const client = new ws("wss://edge.faceit.com/v1/ws");
 
-const log = false;
-const matchid = "1-0abd6239-e094-4bd9-b317-171160db6ffe";
+const shouldlog = true;
+const matchid = "1-e4d6d0a7-6938-4f92-a4ab-3292b140763a";
 
-if (log) {
+let stream;
+
+if (shouldlog) {
   const name = "logs/" + moment().format("yyyy-MM-DD_HH-mm-ss-SSS") + ".txt";
-  const stream = fs.createWriteStream(name, { flags: "a" });
+  stream = fs.createWriteStream(name, { flags: "a" });
 }
 
 const outgoing = {
@@ -28,7 +30,14 @@ const outgoing = {
 };
 
 function send(msg) {
+  log(msg, false);
   client.send(Buffer.from(msg, "base64"));
+}
+
+function log(msg, inc) {
+  if (!shouldlog) return;
+  const time = moment().format("yyyy-mm-DD_HH-mm-ss");
+  stream.write(`${time} ${inc ? "INC" : "OUT"} ${Buffer.from(msg, "utf-8").toString("base64")}\n`);
 }
 
 function init() {
@@ -53,10 +62,7 @@ client.on("close", (code, reason) => {
 });
 
 client.on("message", (message) => {
-  if (log) {
-    const time = moment().format("yyyy-mm-DD_HH-mm-ss ");
-    stream.write(time + Buffer.from(message, "utf-8").toString("base64") + "\n");
-  }
+  log(message, true);
 
   // console.log(`RAW: ${Buffer.from(message, "utf-8")}`);
 
